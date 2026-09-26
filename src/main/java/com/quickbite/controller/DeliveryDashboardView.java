@@ -251,6 +251,7 @@ public class DeliveryDashboardView {
             lblDriverStatus.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #D97706;");
         }
 
-        lblPoolCount.setText("Driver Pool: " + driverPool.getAvailableCount() + " available | " + driverPool.getBusyCount() + " busy");
+        lblPoolCount.setText("Driver Pool: " + driverPool.getAvailableCount() + " available | " +
+                driverPool.getBusyCount() + " busy | " + driverPool.getQueuedCount() + " order(s) queued");
     }
 }

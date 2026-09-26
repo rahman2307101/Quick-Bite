@@ -17,13 +17,18 @@ import javafx.stage.Stage;
  * Left panel: branding, stats, testimonial.
  * Right panel: role-selector cards, sign-in form, social login buttons.
  * Demonstrates OOP polymorphism: user.showDashboard() routes to the correct dashboard subclass.
+ *
+ * Role enforcement: the person must select the role card matching their account
+ * (Customer / Restaurant / Rider) before signing in — AuthService.login(email, password, expectedRole)
+ * rejects the attempt if the account's actual role doesn't match the selected card.
  */
 public class LoginView {
 
     private final AuthService authService = new AuthService();
 
-    // Tracks which role card is currently selected
+    // Tracks which role card is currently selected (display label + internal role key)
     private String selectedRole = "Customer";
+    private String selectedRoleKey = "CUSTOMER";
 
     // ─────────────────────────────────────────────────────────────────────────
     // Entry point
@@ -70,11 +75,11 @@ public class LoginView {
 
         Label logoIcon = new Label("⚡");
         logoIcon.setStyle(
-            "-fx-font-size: 16px;" +
-            "-fx-background-color: #FF6B00;" +
-            "-fx-text-fill: white;" +
-            "-fx-background-radius: 8px;" +
-            "-fx-padding: 6px 9px;"
+                "-fx-font-size: 16px;" +
+                        "-fx-background-color: #FF6B00;" +
+                        "-fx-text-fill: white;" +
+                        "-fx-background-radius: 8px;" +
+                        "-fx-padding: 6px 9px;"
         );
 
         Label logoText = new Label("Quick Bite");
@@ -98,8 +103,8 @@ public class LoginView {
         taglineSpacer.setPrefHeight(10);
 
         Label subtitle = new Label(
-            "A single platform connecting hungry customers,\n" +
-            "restaurant partners, and delivery riders."
+                "A single platform connecting hungry customers,\n" +
+                        "restaurant partners, and delivery riders."
         );
         subtitle.setStyle("-fx-font-size: 11px; -fx-text-fill: #777777; -fx-line-spacing: 3;");
         subtitle.setWrapText(true);
@@ -110,9 +115,9 @@ public class LoginView {
         HBox statsRow = new HBox(22);
         statsRow.setPadding(new Insets(22, 0, 0, 0));
         statsRow.getChildren().addAll(
-            statBlock("03",   "Restaurants"),
-            statBlock("98%",    "On-time rate"),
-            statBlock("18 min", "Avg. delivery")
+                statBlock("03",   "Restaurants"),
+                statBlock("98%",    "On-time rate"),
+                statBlock("18 min", "Avg. delivery")
         );
 
         // ── Bottom flexible spacer ────────────────────────────────────────────
@@ -122,13 +127,13 @@ public class LoginView {
         // ── Testimonial card ──────────────────────────────────────────────────
         VBox testimonial = new VBox(12);
         testimonial.setStyle(
-            "-fx-background-color: #1E1E1E;" +
-            "-fx-background-radius: 10px;" +
-            "-fx-padding: 16px;"
+                "-fx-background-color: #1E1E1E;" +
+                        "-fx-background-radius: 10px;" +
+                        "-fx-padding: 16px;"
         );
 
         Label quote = new Label(
-            "\"Delicious food, fast delivery, and a seamless ordering experience. I never have to worry about dinner anymore!”\n"
+                "\"Delicious food, fast delivery, and a seamless ordering experience. I never have to worry about dinner anymore!”\n"
         );
         quote.setStyle("-fx-font-size: 11px; -fx-text-fill: #CCCCCC; -fx-line-spacing: 3; -fx-font-style: italic;");
         quote.setWrapText(true);
@@ -138,14 +143,14 @@ public class LoginView {
 
         Label avatar = new Label("S");
         avatar.setStyle(
-            "-fx-background-color: #FF6B00;" +
-            "-fx-text-fill: white;" +
-            "-fx-font-weight: bold;" +
-            "-fx-font-size: 13px;" +
-            "-fx-min-width: 34px;" +
-            "-fx-min-height: 34px;" +
-            "-fx-background-radius: 17px;" +
-            "-fx-alignment: center;"
+                "-fx-background-color: #FF6B00;" +
+                        "-fx-text-fill: white;" +
+                        "-fx-font-weight: bold;" +
+                        "-fx-font-size: 13px;" +
+                        "-fx-min-width: 34px;" +
+                        "-fx-min-height: 34px;" +
+                        "-fx-background-radius: 17px;" +
+                        "-fx-alignment: center;"
         );
 
         VBox authorInfo = new VBox(2);
@@ -235,6 +240,7 @@ public class LoginView {
 
             card.setOnMouseClicked(e -> {
                 selectedRole = roles[idx];
+                selectedRoleKey = roleKeys[idx];
                 for (int j = 0; j < 3; j++) {
                     applyRoleCardStyle(roleCards[j], j == idx);
                 }
@@ -253,12 +259,12 @@ public class LoginView {
         Label signingBar = new Label("● Signing in as  Customer");
         signingBar.setMaxWidth(Double.MAX_VALUE);
         signingBar.setStyle(
-            "-fx-background-color: #2A1200;" +
-            "-fx-text-fill: #FF6B00;" +
-            "-fx-font-size: 12px;" +
-            "-fx-font-weight: bold;" +
-            "-fx-padding: 8px 14px;" +
-            "-fx-background-radius: 6px;"
+                "-fx-background-color: #2A1200;" +
+                        "-fx-text-fill: #FF6B00;" +
+                        "-fx-font-size: 12px;" +
+                        "-fx-font-weight: bold;" +
+                        "-fx-padding: 8px 14px;" +
+                        "-fx-background-radius: 6px;"
         );
         signingBarRef[0] = signingBar;
 
@@ -279,7 +285,7 @@ public class LoginView {
         Label forgotLabel = new Label("Forgot password?");
         forgotLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #FF6B00; -fx-cursor: hand;");
         forgotLabel.setOnMouseClicked(e ->
-            AlertUtil.showInfo("Forgot Password", "Please contact support or re-register with a new account.")
+                AlertUtil.showInfo("Forgot Password", "Please contact support or re-register with a new account.")
         );
         passLabelRow.getChildren().addAll(passLabel, lblSpacer, forgotLabel);
 
@@ -295,19 +301,25 @@ public class LoginView {
         Button btnSignIn = new Button("Sign in as Customer");
         btnSignIn.setMaxWidth(Double.MAX_VALUE);
         btnSignIn.setStyle(
-            "-fx-background-color: #FF6B00;" +
-            "-fx-text-fill: white;" +
-            "-fx-font-size: 14px;" +
-            "-fx-font-weight: bold;" +
-            "-fx-padding: 13px;" +
-            "-fx-background-radius: 8px;" +
-            "-fx-cursor: hand;"
+                "-fx-background-color: #FF6B00;" +
+                        "-fx-text-fill: white;" +
+                        "-fx-font-size: 14px;" +
+                        "-fx-font-weight: bold;" +
+                        "-fx-padding: 13px;" +
+                        "-fx-background-radius: 8px;" +
+                        "-fx-cursor: hand;"
         );
         signInBtnRef[0] = btnSignIn;
 
         btnSignIn.setOnAction(e -> {
             try {
-                User user = authService.login(txtEmail.getText().trim(), txtPassword.getText());
+                // Role-checked login: fails if the account's real role doesn't
+                // match the currently selected role card (selectedRoleKey).
+                User user = authService.login(
+                        txtEmail.getText().trim(),
+                        txtPassword.getText(),
+                        selectedRoleKey
+                );
                 // OOP Polymorphism: routes to Customer / RestaurantAdmin / DeliveryStaff dashboard
                 user.showDashboard(stage);
             } catch (Exception ex) {
@@ -349,19 +361,19 @@ public class LoginView {
 
         // ── Assemble container ────────────────────────────────────────────────
         container.getChildren().addAll(
-            welcomeLabel,
-            subLabel,
-            roleRow,
-            signingBar,
-            emailLabel,
-            txtEmail,
-            passLabelRow,
-            txtPassword,
-            keepSignedIn,
-            btnSignIn,
-            createRow,
-            divider,
-            socialRow
+                welcomeLabel,
+                subLabel,
+                roleRow,
+                signingBar,
+                emailLabel,
+                txtEmail,
+                passLabelRow,
+                txtPassword,
+                keepSignedIn,
+                btnSignIn,
+                createRow,
+                divider,
+                socialRow
         );
 
         panel.getChildren().add(container);
@@ -400,21 +412,21 @@ public class LoginView {
         roleCombo.setValue("Customer");
         roleCombo.setMaxWidth(Double.MAX_VALUE);
         roleCombo.setStyle(
-            "-fx-background-color: #1A1A1A;" +
-            "-fx-border-color: #333333;" +
-            "-fx-border-radius: 8px;" +
-            "-fx-background-radius: 8px;" +
-            "-fx-font-size: 13px;"
+                "-fx-background-color: #1A1A1A;" +
+                        "-fx-border-color: #333333;" +
+                        "-fx-border-radius: 8px;" +
+                        "-fx-background-radius: 8px;" +
+                        "-fx-font-size: 13px;"
         );
 
         Button btnRegister = new Button("Create Account");
         btnRegister.setMaxWidth(Double.MAX_VALUE);
         btnRegister.setStyle(
-            "-fx-background-color: #FF6B00;" +
-            "-fx-text-fill: white;" +
-            "-fx-font-weight: bold;" +
-            "-fx-padding: 11px;" +
-            "-fx-background-radius: 8px;"
+                "-fx-background-color: #FF6B00;" +
+                        "-fx-text-fill: white;" +
+                        "-fx-font-weight: bold;" +
+                        "-fx-padding: 11px;" +
+                        "-fx-background-radius: 8px;"
         );
 
         btnRegister.setOnAction(e -> {
@@ -424,12 +436,12 @@ public class LoginView {
                 else if ("Delivery Staff".equals(roleCombo.getValue()))   roleKey = "DELIVERY_STAFF";
 
                 User newUser = authService.register(
-                    regName.getText().trim(),
-                    regEmail.getText().trim(),
-                    regPass.getText(),
-                    regPhone.getText().trim(),
-                    regAddress.getText().trim(),
-                    roleKey
+                        regName.getText().trim(),
+                        regEmail.getText().trim(),
+                        regPass.getText(),
+                        regPhone.getText().trim(),
+                        regAddress.getText().trim(),
+                        roleKey
                 );
                 AlertUtil.showInfo("Welcome!", "Account created! Welcome, " + newUser.getName() + ".");
                 dialog.close();
@@ -441,15 +453,15 @@ public class LoginView {
 
         // Labels for each field
         form.getChildren().addAll(
-            title, subLbl, new Region() {{ setPrefHeight(8); }},
-            fieldLabel("Full Name"),    regName,
-            fieldLabel("Email"),        regEmail,
-            fieldLabel("Password"),     regPass,
-            fieldLabel("Phone"),        regPhone,
-            fieldLabel("Address"),      regAddress,
-            fieldLabel("Role"),         roleCombo,
-            new Region() {{ setPrefHeight(8); }},
-            btnRegister
+                title, subLbl, new Region() {{ setPrefHeight(8); }},
+                fieldLabel("Full Name"),    regName,
+                fieldLabel("Email"),        regEmail,
+                fieldLabel("Password"),     regPass,
+                fieldLabel("Phone"),        regPhone,
+                fieldLabel("Address"),      regAddress,
+                fieldLabel("Role"),         roleCombo,
+                new Region() {{ setPrefHeight(8); }},
+                btnRegister
         );
 
         Scene s = new Scene(form);
@@ -466,21 +478,21 @@ public class LoginView {
     private void applyRoleCardStyle(VBox card, boolean active) {
         if (active) {
             card.setStyle(
-                "-fx-background-color: #1E0900;" +
-                "-fx-background-radius: 10px;" +
-                "-fx-border-color: #FF6B00;" +
-                "-fx-border-radius: 10px;" +
-                "-fx-border-width: 1.8px;" +
-                "-fx-padding: 10px;"
+                    "-fx-background-color: #1E0900;" +
+                            "-fx-background-radius: 10px;" +
+                            "-fx-border-color: #FF6B00;" +
+                            "-fx-border-radius: 10px;" +
+                            "-fx-border-width: 1.8px;" +
+                            "-fx-padding: 10px;"
             );
         } else {
             card.setStyle(
-                "-fx-background-color: #1A1A1A;" +
-                "-fx-background-radius: 10px;" +
-                "-fx-border-color: #2E2E2E;" +
-                "-fx-border-radius: 10px;" +
-                "-fx-border-width: 1px;" +
-                "-fx-padding: 10px;"
+                    "-fx-background-color: #1A1A1A;" +
+                            "-fx-background-radius: 10px;" +
+                            "-fx-border-color: #2E2E2E;" +
+                            "-fx-border-radius: 10px;" +
+                            "-fx-border-width: 1px;" +
+                            "-fx-padding: 10px;"
             );
         }
     }
@@ -488,14 +500,14 @@ public class LoginView {
     /** Applies dark input field styling. */
     private void styleInput(TextField field) {
         field.setStyle(
-            "-fx-background-color: #1A1A1A;" +
-            "-fx-text-fill: white;" +
-            "-fx-prompt-text-fill: #555555;" +
-            "-fx-border-color: #2E2E2E;" +
-            "-fx-border-radius: 8px;" +
-            "-fx-background-radius: 8px;" +
-            "-fx-padding: 10px 13px;" +
-            "-fx-font-size: 13px;"
+                "-fx-background-color: #1A1A1A;" +
+                        "-fx-text-fill: white;" +
+                        "-fx-prompt-text-fill: #555555;" +
+                        "-fx-border-color: #2E2E2E;" +
+                        "-fx-border-radius: 8px;" +
+                        "-fx-background-radius: 8px;" +
+                        "-fx-padding: 10px 13px;" +
+                        "-fx-font-size: 13px;"
         );
         field.setMaxWidth(Double.MAX_VALUE);
     }
@@ -504,14 +516,14 @@ public class LoginView {
     private Button socialBtn(String text) {
         Button btn = new Button(text);
         btn.setStyle(
-            "-fx-background-color: #1A1A1A;" +
-            "-fx-text-fill: white;" +
-            "-fx-font-size: 12px;" +
-            "-fx-padding: 10px 16px;" +
-            "-fx-background-radius: 8px;" +
-            "-fx-border-color: #2E2E2E;" +
-            "-fx-border-radius: 8px;" +
-            "-fx-cursor: hand;"
+                "-fx-background-color: #1A1A1A;" +
+                        "-fx-text-fill: white;" +
+                        "-fx-font-size: 12px;" +
+                        "-fx-padding: 10px 16px;" +
+                        "-fx-background-radius: 8px;" +
+                        "-fx-border-color: #2E2E2E;" +
+                        "-fx-border-radius: 8px;" +
+                        "-fx-cursor: hand;"
         );
         return btn;
     }

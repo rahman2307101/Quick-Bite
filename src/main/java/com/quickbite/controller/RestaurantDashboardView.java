@@ -810,13 +810,9 @@ public class RestaurantDashboardView {
         banner.setPadding(new Insets(10, 14, 10, 14));
         banner.setStyle("-fx-background-color: #0E2218; -fx-border-color: #065F46; -fx-border-radius: 8px; -fx-background-radius: 8px;");
 
-        Label badge = new Label("LIVE MARKETPLACE SYNC");
-        badge.setStyle("-fx-background-color: #059669; -fx-text-fill: white; -fx-font-size: 10px; -fx-font-weight: bold; -fx-padding: 3px 7px; -fx-background-radius: 4px;");
 
-        Label desc = new Label("The Customer Dashboard will strictly and only display partner restaurants registered here. Register new outlets or modify existing listings below.");
-        desc.setStyle("-fx-font-size: 11px; -fx-text-fill: #6EE7B7; -fx-font-weight: bold;");
 
-        banner.getChildren().addAll(badge, desc);
+
 
         registeredTable = new TableView<>();
         registeredTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);

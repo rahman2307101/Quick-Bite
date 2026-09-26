@@ -1,5 +1,6 @@
 package com.quickbite.controller;
 
+import com.quickbite.api.DishOfTheDayService;
 import com.quickbite.api.SmartDeliveryService;
 import com.quickbite.dao.FoodItemDAO;
 import com.quickbite.dao.RestaurantDAO;
@@ -41,6 +42,8 @@ import java.util.*;
  * - "Near You" 6-card Restaurant Grid with badges, ratings, delivery times & menu inspector
  * - Right Sidebar with Live Active Order Stepper + Courier Card & Interactive Shopping Cart
  * - Real-time checkout, SQLite persistence, and Smart Delivery Weather API integration
+ * - "Dish of the Day" popup shown on login, dynamically selected via DishOfTheDayService
+ *   (never hardcoded — pulled from the live menu database and rotated daily)
  */
 public class CustomerDashboardView {
 
@@ -51,6 +54,7 @@ public class CustomerDashboardView {
     private final ReviewDAO reviewDAO = new ReviewDAO();
     private final FoodItemDAO foodItemDAO = new FoodItemDAO();
     private final SmartDeliveryService smartDeliveryService = SmartDeliveryService.getInstance();
+    private final DishOfTheDayService dishOfTheDayService = DishOfTheDayService.getInstance();
 
     // Flat delivery charge — no free-delivery offers
     private static final double DELIVERY_FEE = 65.00;
@@ -129,6 +133,10 @@ public class CustomerDashboardView {
         stage.setScene(scene);
         stage.setResizable(true);
         stage.show();
+
+        // Show today's "Dish of the Day" promo shortly after the dashboard renders,
+        // so the main window is visible behind the popup instead of appearing blank.
+        Platform.runLater(() -> showDishOfTheDayPopup(stage));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -299,42 +307,21 @@ public class CustomerDashboardView {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        // Search Field + Search Button
+        // Search Field
         searchField = new TextField();
-        searchField.setPromptText("Restaurants, dishes...");
+        searchField.setPromptText("🔍  Restaurants, dishes...");
         searchField.setStyle(
                 "-fx-background-color: #18181C;" +
                         "-fx-text-fill: white;" +
                         "-fx-prompt-text-fill: #71717A;" +
                         "-fx-border-color: #27272F;" +
-                        "-fx-border-radius: 20px 0 0 20px;" +
-                        "-fx-background-radius: 20px 0 0 20px;" +
+                        "-fx-border-radius: 20px;" +
+                        "-fx-background-radius: 20px;" +
                         "-fx-padding: 8px 16px;" +
-                        "-fx-pref-width: 230px;" +
+                        "-fx-pref-width: 250px;" +
                         "-fx-font-size: 12px;"
         );
-        // Live filtering as the user types...
         searchField.textProperty().addListener((obs, oldV, newV) -> refreshRestaurants());
-        // ...and pressing Enter in the field also explicitly runs the search.
-        searchField.setOnAction(e -> refreshRestaurants());
-
-        Button btnSearch = new Button("🔍");
-        btnSearch.setCursor(Cursor.HAND);
-        btnSearch.setStyle(
-                "-fx-background-color: #FF5722;" +
-                        "-fx-text-fill: white;" +
-                        "-fx-font-size: 13px;" +
-                        "-fx-border-color: #27272F;" +
-                        "-fx-border-radius: 0 20px 20px 0;" +
-                        "-fx-background-radius: 0 20px 20px 0;" +
-                        "-fx-padding: 8px 14px;" +
-                        "-fx-cursor: hand;"
-        );
-        btnSearch.setOnAction(e -> refreshRestaurants());
-
-        HBox searchBox = new HBox();
-        searchBox.setAlignment(Pos.CENTER_LEFT);
-        searchBox.getChildren().addAll(searchField, btnSearch);
 
         // Location Pill
         HBox locPill = new HBox(6);
@@ -353,7 +340,7 @@ public class CustomerDashboardView {
         locText.setStyle("-fx-font-size: 12px; -fx-text-fill: #E4E4E7;");
         locPill.getChildren().add(locText);
         locPill.setOnMouseClicked(e -> showAddressChangeDialog());
-        topBar.getChildren().addAll(greetBox, spacer, searchBox, locPill);
+        topBar.getChildren().addAll(greetBox, spacer, searchField, locPill);
         return topBar;
     }
 
@@ -676,49 +663,41 @@ public class CustomerDashboardView {
         Map<String, String[]> meta = new LinkedHashMap<>();
         String deliveryFeeStr = String.format("BDT %.2f", DELIVERY_FEE);
         meta.put("KFC Bangladesh", new String[]{"TOP PICK", "20% OFF", "Crispy Fried Chicken & Burgers", "★ 5.0 (2.8k)", "20–30 min", deliveryFeeStr, "#E4002B"});
+        meta.put("Ember & Ash", new String[]{"POPULAR", "30% OFF", "Wood-fired Pizza", "★ 4.9 (1.2k)", "22–32 min", deliveryFeeStr, "#E25822"});
+        meta.put("Shogun Omakase", new String[]{"NEW", "", "Premium Sushi", "★ 4.8 (876)", "35–45 min", deliveryFeeStr, "#3B82F6"});
+        meta.put("The Patty Lab", new String[]{"", "", "Craft Burgers", "★ 4.7 (2.1k)", "18–28 min", deliveryFeeStr, "#EAB308"});
+        meta.put("Lemongrass House", new String[]{"", "", "Authentic Thai", "★ 4.6 (543)", "28–38 min", deliveryFeeStr, "#10B981"});
+        meta.put("Field & Fork", new String[]{"HEALTHY", "", "Garden Salads", "★ 4.5 (389)", "15–25 min", deliveryFeeStr, "#14B8A6"});
+        meta.put("Petite Maison", new String[]{"TOP RATED", "", "French Desserts", "★ 4.9 (718)", "30–40 min", deliveryFeeStr, "#EC4899"});
 
         for (Restaurant r : allRests) {
             String[] m = meta.get(r.getName());
             String cuisine = m != null ? m[2] : r.getDescription();
-            String rName = r.getName() != null ? r.getName() : "";
-
-            // Fetch this restaurant's menu once and reuse it for both filters below,
-            // instead of opening a fresh DB connection twice per restaurant per keystroke.
-            List<FoodItem> items;
-            try {
-                items = menuService.getFoodItems(r.getId());
-            } catch (Exception ex) {
-                items = Collections.emptyList();
-            }
 
             // Filter by category
             if (!"All".equalsIgnoreCase(selectedCategory)) {
                 boolean matchesCategory = false;
                 if (cuisine != null && cuisine.toLowerCase().contains(selectedCategory.toLowerCase()))
                     matchesCategory = true;
-                if (rName.toLowerCase().contains(selectedCategory.toLowerCase())) matchesCategory = true;
-                if (!matchesCategory) {
-                    for (FoodItem fi : items) {
-                        if (selectedCategory.equalsIgnoreCase(fi.getCategory())) {
-                            matchesCategory = true;
-                            break;
-                        }
+                if (r.getName().toLowerCase().contains(selectedCategory.toLowerCase())) matchesCategory = true;
+                // Check if any menu items match
+                List<FoodItem> items = menuService.getFoodItems(r.getId());
+                for (FoodItem fi : items) {
+                    if (fi.getCategory().equalsIgnoreCase(selectedCategory)) {
+                        matchesCategory = true;
+                        break;
                     }
                 }
                 if (!matchesCategory) continue;
             }
 
-            // Filter by search query — matches restaurant name, cuisine, or any dish's name/description.
-            // Every field is null-checked so one item with a blank description can't quietly break the search.
+            // Filter by search query
             if (!query.isEmpty()) {
-                boolean matchesSearch = rName.toLowerCase().contains(query)
-                        || (cuisine != null && cuisine.toLowerCase().contains(query));
+                boolean matchesSearch = r.getName().toLowerCase().contains(query) || (cuisine != null && cuisine.toLowerCase().contains(query));
                 if (!matchesSearch) {
+                    List<FoodItem> items = menuService.getFoodItems(r.getId());
                     for (FoodItem fi : items) {
-                        String fiName = fi.getName();
-                        String fiDesc = fi.getDescription();
-                        if ((fiName != null && fiName.toLowerCase().contains(query))
-                                || (fiDesc != null && fiDesc.toLowerCase().contains(query))) {
+                        if (fi.getName().toLowerCase().contains(query) || fi.getDescription().toLowerCase().contains(query)) {
                             matchesSearch = true;
                             break;
                         }
@@ -736,25 +715,11 @@ public class CustomerDashboardView {
             emptyBox.setAlignment(Pos.CENTER);
             emptyBox.setPadding(new Insets(30, 20, 30, 20));
             emptyBox.setPrefWidth(550);
-            Label emptyIcon = new Label(query.isEmpty() ? "🏪" : "🔍");
+            Label emptyIcon = new Label("🏪");
             emptyIcon.setStyle("-fx-font-size: 38px;");
-
-            String emptyTitleText;
-            String emptySubText;
-            if (!query.isEmpty()) {
-                emptyTitleText = "No results for \"" + searchField.getText().trim() + "\"";
-                emptySubText = "Try a different restaurant, cuisine, or dish name.";
-            } else if (!"All".equalsIgnoreCase(selectedCategory)) {
-                emptyTitleText = "No restaurants in \"" + selectedCategory + "\" right now.";
-                emptySubText = "Try a different category or clear the filter.";
-            } else {
-                emptyTitleText = "No registered partner restaurants found.";
-                emptySubText = "Only restaurants registered in the Restaurant Admin Dashboard are listed here.";
-            }
-
-            Label emptyTitle = new Label(emptyTitleText);
+            Label emptyTitle = new Label("No registered partner restaurants found.");
             emptyTitle.setStyle("-fx-text-fill: #E4E4E7; -fx-font-size: 14px; -fx-font-weight: bold;");
-            Label emptySub = new Label(emptySubText);
+            Label emptySub = new Label("Only restaurants registered in the Restaurant Admin Dashboard are listed here.");
             emptySub.setStyle("-fx-text-fill: #71717A; -fx-font-size: 12px;");
             emptyBox.getChildren().addAll(emptyIcon, emptyTitle, emptySub);
             restaurantGrid.getChildren().add(emptyBox);
@@ -1072,13 +1037,13 @@ public class CustomerDashboardView {
         btnApplyPromo.setStyle("-fx-background-color: transparent; -fx-text-fill: #FF5722; -fx-font-size: 11px; -fx-font-weight: bold; -fx-cursor: hand;");
         btnApplyPromo.setOnAction(e -> {
             String code = txtPromo.getText().trim();
-            if ("CSEKUET".equalsIgnoreCase(code) || "KUETIAN".equalsIgnoreCase(code) ) {
-                promoDiscount = 50.00;
+            if ("QUICKBITE".equalsIgnoreCase(code) || "EMBER".equalsIgnoreCase(code) || "FREE".equalsIgnoreCase(code)) {
+                promoDiscount = 5.00;
                 appliedPromo = code.toUpperCase();
                 AlertUtil.showInfo("Promo Applied!", "Code '" + appliedPromo + "' applied! BDT 5.00 discount activated.");
                 refreshCartDisplay();
             } else {
-                AlertUtil.showWarning("Invalid Code", "Code '" + code + "' is not valid.'.");
+                AlertUtil.showWarning("Invalid Code", "Code '" + code + "' is not valid. Try 'QUICKBITE'.");
             }
         });
 
@@ -1837,5 +1802,198 @@ public class CustomerDashboardView {
             customer.setAddress(newAddr);
             AlertUtil.showInfo("Address Updated", "Delivery destination updated to: " + newAddr);
         });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 7. DISH OF THE DAY POPUP (dynamic — never hardcoded)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Fetches today's Dish of the Day from {@link DishOfTheDayService} — which
+     * selects a real, currently-available menu item straight from the database,
+     * deterministically rotated by today's calendar date, so it is never a fixed
+     * dish name baked into the code — and shows it in a dismissible popup.
+     * Clicking "Add to Cart" adds that exact dish to the customer's cart at its
+     * discounted "today only" price.
+     */
+    private void showDishOfTheDayPopup(Stage ownerStage) {
+        DishOfTheDay dod = dishOfTheDayService.getDishOfTheDay();
+        if (dod == null) {
+            return; // No available menu items anywhere yet — nothing to promote today.
+        }
+
+        Stage modal = new Stage();
+        modal.initModality(Modality.APPLICATION_MODAL);
+        modal.initOwner(ownerStage);
+        modal.setTitle("Dish of the Day");
+
+        VBox root = new VBox(14);
+        root.setPadding(new Insets(22));
+        root.setStyle("-fx-background-color: #141417; -fx-background-radius: 14px;");
+        root.setPrefWidth(360);
+
+        HBox badgeRow = new HBox();
+        badgeRow.setAlignment(Pos.CENTER_LEFT);
+        Label badge = new Label("🌟 DISH OF THE DAY");
+        badge.setStyle(
+                "-fx-background-color: #FF5722;" +
+                        "-fx-text-fill: white;" +
+                        "-fx-font-weight: bold;" +
+                        "-fx-font-size: 11px;" +
+                        "-fx-padding: 5px 10px;" +
+                        "-fx-background-radius: 6px;"
+        );
+        badgeRow.getChildren().add(badge);
+
+        // Dish image — reuses the same classpath / file-path fallback strategy as the menu cards
+        StackPane imageBox = new StackPane();
+        imageBox.setPrefSize(316, 160);
+        ImageView imgView = new ImageView();
+        imgView.setFitWidth(316);
+        imgView.setFitHeight(160);
+        imgView.setPreserveRatio(false);
+        Rectangle clip = new Rectangle(316, 160);
+        clip.setArcWidth(12);
+        clip.setArcHeight(12);
+        imgView.setClip(clip);
+
+        boolean loaded = loadDishOfTheDayImage(imgView, dod.getFoodItem().getImageUrl());
+        if (loaded) {
+            imageBox.getChildren().add(imgView);
+        } else {
+            imageBox.setStyle("-fx-background-color: #24242D; -fx-background-radius: 12px;");
+            Label icon = new Label(getRestaurantEmoji(dod.getFoodItem().getName()));
+            icon.setStyle("-fx-font-size: 40px;");
+            imageBox.getChildren().add(icon);
+        }
+
+        Label nameLbl = new Label(dod.getFoodItem().getName());
+        nameLbl.setStyle("-fx-font-size: 19px; -fx-font-weight: bold; -fx-text-fill: white;");
+        nameLbl.setWrapText(true);
+
+        Label restLbl = new Label("From " + dod.getRestaurantName());
+        restLbl.setStyle("-fx-font-size: 12px; -fx-text-fill: #9CA3AF;");
+
+        Label descLbl = new Label(dod.getFoodItem().getDescription());
+        descLbl.setStyle("-fx-font-size: 12px; -fx-text-fill: #D4D4D8;");
+        descLbl.setWrapText(true);
+
+        HBox priceRow = new HBox(10);
+        priceRow.setAlignment(Pos.CENTER_LEFT);
+
+        Label origPrice = new Label(String.format("BDT %.2f", dod.getFoodItem().getPrice()));
+        origPrice.setStyle("-fx-font-size: 13px; -fx-text-fill: #71717A; -fx-strikethrough: true;");
+
+        Label discPrice = new Label(String.format("BDT %.2f", dod.getDiscountedPrice()));
+        discPrice.setStyle("-fx-font-size: 19px; -fx-font-weight: bold; -fx-text-fill: #FF5722;");
+
+        Label discBadge = new Label(dod.getDiscountPercent() + "% OFF TODAY");
+        discBadge.setStyle(
+                "-fx-background-color: #062818;" +
+                        "-fx-text-fill: #22C55E;" +
+                        "-fx-font-size: 10px;" +
+                        "-fx-font-weight: bold;" +
+                        "-fx-padding: 3px 8px;" +
+                        "-fx-background-radius: 6px;"
+        );
+
+        priceRow.getChildren().addAll(origPrice, discPrice, discBadge);
+
+        Button btnAdd = new Button("🛒 Add to Cart at This Price");
+        btnAdd.setMaxWidth(Double.MAX_VALUE);
+        btnAdd.setStyle(
+                "-fx-background-color: #FF5722;" +
+                        "-fx-text-fill: white;" +
+                        "-fx-font-size: 13px;" +
+                        "-fx-font-weight: bold;" +
+                        "-fx-padding: 11px;" +
+                        "-fx-background-radius: 8px;" +
+                        "-fx-cursor: hand;"
+        );
+        btnAdd.setOnAction(e -> {
+            addDishOfTheDayToCart(dod);
+            modal.close();
+            AlertUtil.showInfo(
+                    "Added to Cart!",
+                    dod.getFoodItem().getName() + " was added to your cart at today's special price of BDT "
+                            + String.format("%.2f", dod.getDiscountedPrice()) + "!"
+            );
+        });
+
+        Button btnDismiss = new Button("Maybe later");
+        btnDismiss.setMaxWidth(Double.MAX_VALUE);
+        btnDismiss.setStyle(
+                "-fx-background-color: transparent;" +
+                        "-fx-text-fill: #9CA3AF;" +
+                        "-fx-font-size: 12px;" +
+                        "-fx-cursor: hand;"
+        );
+        btnDismiss.setOnAction(e -> modal.close());
+
+        root.getChildren().addAll(badgeRow, imageBox, nameLbl, restLbl, descLbl, priceRow, btnAdd, btnDismiss);
+
+        Scene s = new Scene(root);
+        try {
+            s.getStylesheets().add(getClass().getResource("/css/style.css").toExternalForm());
+        } catch (Exception ignored) {
+        }
+        modal.setScene(s);
+        modal.show();
+    }
+
+    /**
+     * Adds the Dish of the Day's exact {@link FoodItem} to the cart, switching the
+     * cart's "source restaurant" to match — the same convention already used by
+     * {@link #reorderFromOrder(Stage, Order)}.
+     */
+    private void addDishOfTheDayToCart(DishOfTheDay dod) {
+        Restaurant r = restaurantDAO.getById(dod.getRestaurantId());
+        if (r != null) {
+            selectedRestaurant = r;
+            if (lblCartSource != null) {
+                lblCartSource.setText("From " + r.getName());
+            }
+        }
+        addToCartSilently(dod.getFoodItem(), 1);
+        refreshCartDisplay();
+    }
+
+    /**
+     * Loads a dish image the same way the menu cards do: classpath resource,
+     * then project images/ folder, then a direct file path. Returns true if an
+     * image was successfully loaded into the given ImageView.
+     */
+    private boolean loadDishOfTheDayImage(ImageView view, String path) {
+        if (path == null || path.isBlank()) return false;
+
+        try {
+            var stream = getClass().getResourceAsStream("/images/" + path);
+            if (stream != null) {
+                view.setImage(new Image(stream, 316, 160, false, true));
+                stream.close();
+                return true;
+            }
+        } catch (Exception ignored) {
+        }
+
+        try {
+            File f = new File("images/" + path);
+            if (f.exists()) {
+                view.setImage(new Image(f.toURI().toString(), 316, 160, false, true, true));
+                return true;
+            }
+        } catch (Exception ignored) {
+        }
+
+        try {
+            File f = new File(path);
+            if (f.exists()) {
+                view.setImage(new Image(f.toURI().toString(), 316, 160, false, true, true));
+                return true;
+            }
+        } catch (Exception ignored) {
+        }
+
+        return false;
     }
 }

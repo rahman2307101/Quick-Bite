@@ -13,6 +13,10 @@ import com.quickbite.util.SessionContext;
 public class AuthService {
     private final UserDAO userDAO = new UserDAO();
 
+    /**
+     * Authenticates a user by email and password only (no role check).
+     * Kept for backward compatibility / internal reuse.
+     */
     public User login(String email, String password) throws IllegalArgumentException {
         if (email == null || email.trim().isEmpty()) {
             throw new IllegalArgumentException("Email address is required.");
@@ -27,6 +31,29 @@ public class AuthService {
         }
 
         SessionContext.setCurrentUser(user);
+        return user;
+    }
+
+    /**
+     * Role-checked login. Only succeeds if the authenticated account's actual role
+     * matches the role card the person selected on the login screen
+     * (e.g. "CUSTOMER", "RESTAURANT_ADMIN", "DELIVERY_STAFF").
+     *
+     * This prevents, for example, a Restaurant Admin account from logging in
+     * via the "Customer" tab, and vice versa.
+     */
+    public User login(String email, String password, String expectedRole) throws IllegalArgumentException {
+        User user = login(email, password); // reuses validation + authentication above
+
+        if (expectedRole != null && !expectedRole.equalsIgnoreCase(user.getRole())) {
+            // Undo the session that login(email, password) just established,
+            // since this login attempt is being rejected.
+            SessionContext.logout();
+            throw new IllegalArgumentException(
+                    "User credentials are incorrect. Please try again."
+            );
+        }
+
         return user;
     }
 
@@ -54,11 +81,7 @@ public class AuthService {
 
         User newUser;
         if ("RESTAURANT_ADMIN".equalsIgnoreCase(role)) {
-            // 0 = no restaurant registered yet. Each new admin starts with their
-            // OWN empty slate instead of being silently pointed at restaurant #1
-            // (previously hard-coded here, which caused every new admin account
-            // to land on the same existing restaurant's dashboard).
-            newUser = new RestaurantAdmin(0, name.trim(), email.trim().toLowerCase(), password, phone.trim(), address.trim(), null, 0);
+            newUser = new RestaurantAdmin(0, name.trim(), email.trim().toLowerCase(), password, phone.trim(), address.trim(), null, 1);
         } else if ("DELIVERY_STAFF".equalsIgnoreCase(role)) {
             newUser = new DeliveryStaff(0, name.trim(), email.trim().toLowerCase(), password, phone.trim(), address.trim(), null, true, "Motorbike");
         } else {
@@ -76,4 +99,7 @@ public class AuthService {
     public void logout() {
         SessionContext.logout();
     }
+
+
+
 }
